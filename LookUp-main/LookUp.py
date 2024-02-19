@@ -6,6 +6,31 @@ from scapy.layers.l2 import ARP, Ether
 import subprocess
 from termcolor import colored
 from os import name
+import nmap
+from tabulate import tabulate
+
+def port_scan(target_ip, start_port, end_port):
+    nm = nmap.PortScanner()
+
+    # Define the range of ports to scan
+    port_range = f"{start_port}-{end_port}"
+
+    # Perform the port scan
+    nm.scan(hosts=target_ip, arguments=f'-p {port_range}')
+
+    # Prepare data for tabulate
+    table_data = []
+    for host in nm.all_hosts():
+        for proto in nm[host].all_protocols():
+            ports = nm[host][proto].keys()
+            for port in ports:
+                state = nm[host][proto][port]['state']
+                table_data.append([host, proto, port, state])
+
+    # Print scan results using tabulate
+    headers = ["Host", "Protocol", "Port", "State"]
+    print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+
 
 if name == "posix":
     euid = os.geteuid()
@@ -70,21 +95,6 @@ def display():
         print(f"{i['ip']}\t{i['mac']}\t{i['vendor']}")
 
 
-def port_scanner(target, start_port, end_port):
-    ports = {}
-    for port in range(start_port, end_port + 1):
-        pac = IP(dst=target) / TCP(dport=port, flags='S')
-
-        response = sr1(pac, timeout=0.2, verbose=False)
-        if str(type(response)) == "<class 'NoneType'>":
-            pass
-        elif response.sprintf("%TCP.flags%") == "SA":
-            ports[port] = response.sprintf("%TCP.sport%")
-
-    print("Port\tService")
-    for i in ports:
-        print(f"{i}\t{ports.get(i).upper()}")
-    print(colored("Scanning Finished", 'red', attrs=['bold']))
 
 
 def sniffer(filters='tcp', interface=get_working_if()):
@@ -140,7 +150,7 @@ try:
         end = int(input())
         print(colored("Scanning may take some time...........\n", 'yellow', attrs=["bold"]), end="")
 
-        port_scanner(tar, start, end)
+        port_scan(tar, start, end)
 
     elif number == '3':
         os_check()
@@ -199,8 +209,8 @@ except socket.gaierror:
 except ValueError:
     print(colored("\nOps! You forgot to enter the number.\nExiting", 'red', attrs=["bold"]))
 
-except FileNotFoundError:
-    print(colored("\nOps! You forgot to give file name.\nExiting", 'red', attrs=["bold"]))
+# except FileNotFoundError:
+#     print(colored("\nOps! You forgot to give file name.\nExiting", 'red', attrs=["bold"]))
 
 except scapy.error.Scapy_Exception:
     print(colored("\nOps! You entered wrong filtered method. Try some from given examples.\nExiting", 'red', attrs=["bold"]))
